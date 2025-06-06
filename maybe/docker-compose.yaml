@@ -1,0 +1,68 @@
+services:
+  web:
+    image: ghcr.io/maybe-finance/maybe:latest
+    volumes:
+      - ./storage:/rails/storage
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.maybe.entrypoints=http"
+      - "traefik.http.routers.maybe.rule=Host(`maybe.<domain>`)"
+      - "traefik.http.middlewares.maybe-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.maybe.middlewares=maybe-https-redirect"
+      - "traefik.http.routers.maybe-secure.entrypoints=https"
+      - "traefik.http.routers.maybe-secure.rule=Host(`maybe.<domain>`)"
+      - "traefik.http.routers.maybe-secure.tls=true"
+      - "traefik.http.routers.maybe-secure.service=maybe"
+      - "traefik.http.services.maybe.loadbalancer.server.port=3000"
+      - "traefik.docker.network=proxy"
+    #ports:
+    #  - 3000:3000
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - sql-isolate
+      - proxy
+
+  worker:
+    image: ghcr.io/maybe-finance/maybe:latest
+    command: bundle exec sidekiq
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    networks:
+      - sql-isolate
+      - proxy
+
+  redis:
+    image: redis:latest
+    ports:
+      - 6379:6379
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sql-isolate
+      - proxy
+
+volumes:
+  #app-storage:
+  #postgres-data:
+  redis-data:
+
+networks:
+  sql-isolate:
+    external: true
+  proxy:
+    external: true

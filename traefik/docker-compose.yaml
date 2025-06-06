@@ -1,0 +1,37 @@
+services:
+  traefik:
+    container_name: traefik
+    image: traefik:v3.3.6
+    ports:
+      - 80:80 # HTTP
+      - 443:443/tcp # HTTPS
+      #- 127.0.0.1:8080:8080 # MGMT WEB UI
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro # ro = read-only access to the docker.sock
+      - /etc/localtime:/etc/localtime:ro
+      #- ${DOCKER_VOLUME_STORAGE:-/mnt/docker-volumes}/traefik:/etc/traefik/ # put the provided traefik.yml and fileConfig.yml files at this location
+      #- ${DOCKER_VOLUME_STORAGE:-/mnt/docker-volumes}/traefik/logs:/logs
+      - ./config/traefik.yml:/traefik.yml:ro
+      - ./config/certs/:/etc/traefik/certs/
+      - ./config/conf:/etc/traefik/conf
+      - ./logs:/logs
+    env_file: .env
+    networks:
+      - proxy
+    #environment:
+    #  - TZ=Australia/Melbourne
+    #  - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN} # change this if you use Cloudflare
+    labels:
+      - traefik.enable=true
+      #- traefik.docker.network=proxy
+      - traefik.http.routers.api.rule=Host(`traefik.<domain>.net`) # Define the subdomain for the traefik dashboard.
+      - traefik.http.routers.api.service=api@internal # Enable Traefik API.
+      - traefik.http.routers.api.middlewares=local-ipwhitelist@file,basic-auth@file # protect dashboard with basic auth and restrict access to private class subnets only
+      #- traefik.http.middlewares.basic-auth-global.basicauth.users=chris:$$apr1$$OyGli7PE$$DvqkhSjxJfg64hjBDLT9x.   #admin:$$apr1$$epoKf5li$$QfTMJZOCS/halv3CiIUEu0 # protect the traefik dashboard by basic auth (pw=password)
+    restart: always
+    extra_hosts:
+      - host.docker.internal:172.18.0.1 # proxy network
+
+networks:
+  proxy:
+    external: true
